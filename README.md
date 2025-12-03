@@ -1,132 +1,80 @@
-Greenie Re – Automated MGA/Carrier Data Pipeline
+Greenie Re – Automated Phase 1 Data Pipeline
 
-End-to-end ingestion, quality checks, ZIP→tract mapping, CEJST/LIDAC eligibility scoring, accounting journal entry generation, and ZIP accumulation analytics.
+End-to-End MGA/Carrier Bordereaux Processing, Data Quality Controls, ZIP/Tract Mapping, CEJST/LIDAC Eligibility, and Intacct Integration
 
 ⸻
 
 📌 Overview
 
-This repository implements the Phase 1 automated data pipeline for Wenhua Zhang’s MGA/carrier program.
-It processes raw carrier bordereaux files, validates them, normalizes key financial fields, enriches each project with geographic indicators (ZIP → county → tract), evaluates CEJST/LIDAC eligibility, generates Intacct-ready journal entries, and produces ZIP accumulation reports.
+This repository contains the full Phase 1 automated data pipeline for Greenie Re’s underwriting and compliance workflow.
+The pipeline ingests MGA/Carrier bordereaux files, performs multi-layered quality checks, standardizes schemas, enriches records with geospatial identifiers (ZIP → Census Tract), applies CEJST/LIDAC eligibility classification, runs accumulation analytics, and generates reconciled accounting outputs for Sage Intacct.
 
-The pipeline is fully modular and built in 8 sequential steps, each producing clean, traceable output in versioned folders (output_stepX/).
+The entire workflow is built to support:
+    •    Regulatory compliance (CEJST, Climate and Economic Justice Screening Tool v2.0)
+    •    Geospatial eligibility using HUD ZIP–Census Tract crosswalks
+    •    MGA/Carrier operational automation (intake → validation → enrichment)
+    •    Accounting / Journal Entry mappings for financial systems
+    •    Risk accumulation detection at the ZIP level
+    •    Production-scale extensibility for Phase 2 deployment
 
-It uses a centralized Schema Registry and Data Quality Framework to guarantee consistency across all steps.
-
-⸻
-
-🧱 Pipeline Architecture (8 Steps)
-
-Step 1 — Intake & Data Quality
-    •    Reads raw carrier bordereaux from /raw/
-    •    Detects file format (.xlsx / .csv)
-    •    Applies schema normalization rules
-    •    Validates required columns, numeric formats, date fields
-    •    Flags anomalies (missing values, invalid types, unknown carriers)
-
-Outputs:
-    •    output_step1/silver_intake_parsed.csv
-    •    output_step1/exceptions_step1_quality.csv
+This Phase 1 repo uses synthetic carrier data for demonstration and validation of the full pipeline capability.
 
 ⸻
 
-Step 2 — Extraction & Normalization
-    •    Casts all numeric/date fields using Schema Registry (schema_registry.py)
-    •    Standardizes column names across different carriers
-    •    Normalizes premium, commission, QS%, dates, addresses
-    •    Attaches metadata (source_file, ingestion_timestamp)
+🚀 Pipeline Summary (8 Steps)
 
-Outputs:
-    •    output_step2/silver_project_records.csv
-    •    output_step2/exceptions_step2_normalization.csv
+1. Intake & Data Quality
+    •    Ingests all raw .xlsx/.csv files from /raw/
+    •    Normalizes headers
+    •    Performs structural validation (columns, types, formats)
+    •    Produces /output_step1/intake_quality_report.csv
 
-⸻
+2. Extraction & Normalization
+    •    Applies a unified schema registry (schema_registry.py)
+    •    Standardizes data types (dates, decimals, strings)
+    •    Ensures determinism across carriers
+    •    Saves standardized table to /output_step2/silver_project_records.csv
 
-Step 3 — ZIP Extraction & Validation
-    •    Extracts ZIP code from any free-form address string
-    •    Pads ZIP to 5 digits (0211 → 00211)
-    •    Validates against HUD ZIP list
-    •    Flags invalid or missing ZIPs
+3. ZIP Extraction & Validation
+    •    Extracts ZIP codes from addresses using strict regex
+    •    Pads ZIPs to 5-digit canonical form
+    •    Validates ZIP against the HUD crosswalk table
+    •    Saves enriched ZIP table → /output_step3/silver_project_with_zip.csv
 
-Outputs:
-    •    output_step3/silver_project_with_zip.csv
-    •    output_step3/exceptions_step3_zip_issues.csv
+4. ZIP → Census Tract Mapping
+    •    Uses HUD ZIP–Tract crosswalk
+    •    Computes best tract via RES_RATIO (residential weight)
+    •    Appends FIPS: state_fips, county_fips, tract_fips
+    •    Output: /output_step4/silver_location_enriched.csv
 
-⸻
+5. CEJST / LIDAC Eligibility Classification
+    •    Loads CEJST v2.0 communities dataset
+    •    Joins tract_fips to disadvantaged indicators
+    •    Determines if project is:
+    •    LIDAC Eligible
+    •    Partially Eligible
+    •    Not Eligible
+    •    Output: /output_step5/gold_lidac_classified.csv
 
-Step 4 — ZIP → Census Tract Mapping
+6. Journal Entry Mapping (Intacct)
+    •    Maps premiums, commissions, penal amounts, program IDs to chart-of-account templates
+    •    Produces ready-to-upload JE CSV
+    •    Output: /output_step6/gold_journal_entries_for_intacct.csv
 
-Uses HUD ZIP-to-tract crosswalk (config/external_data/hud_zip_tract_crosswalk.csv) to compute:
-    •    state FIPS
-    •    county FIPS
-    •    census tract FIPS
+7. ZIP-Level Accumulation
+    •    Aggregates project counts, premium sums, penal exposures
+    •    Flags RED/YELLOW/GREEN accumulation zones
+    •    Output: /output_step7/gold_zip_accumulation_flags.csv
 
-Selects tract with highest residential ratio per ZIP.
+8. Final Phase 1 Output Packaging
 
-Outputs:
-    •    output_step4/silver_location_enriched.csv
-    •    output_step4/exceptions_step4_tract_mapping.csv
-
-⸻
-
-Step 5 — CEJST / LIDAC Eligibility Scoring
-
-Using CEJST v2 dataset (config/external_data/cejst_v2_communities.csv), pipeline:
-    •    Joins projects by census tract FIPS
-    •    Determines whether tract qualifies as disadvantaged
-    •    Computes LIDAC eligibility + reason string
-
-Outputs:
-    •    output_step5/gold_lidac_classified.csv
-    •    output_step5/exceptions_step5_missing_cejst_match.csv
-
-⸻
-
-Step 6 — Journal Entry Mapping (Intacct)
-
-Converts each project into accounting-ready line items:
-    •    Gross premium
-    •    Net premium
-    •    Commission
-    •    Ceded commission
-    •    Penal amount
-    •    Tract & ZIP metadata
-    •    LIDAC eligibility fields
-
-Outputs:
-    •    output_step6/gold_journal_entries_for_intacct.csv
-    •    output_step6/exceptions_step6_journal_mapping.csv
-
-⸻
-
-Step 7 — ZIP Accumulation Analysis
-
-Aggregates exposure by ZIP:
-    •    Project count
-    •    Carriers involved
-    •    Total gross premium
-    •    Total penal amount
-    •    Auto-classification (Green / Yellow / Red)
-
-Outputs:
-    •    output_step7/gold_zip_accumulation_flags.csv
-    •    output_step7/exceptions_step7_missing_zip_or_premium.csv
-
-⸻
-
-Step 8 — Phase 1 Final Output Packaging
-
-Assembles all key stakeholder deliverables:
+Creates complete Phase 1 deliverables:
     •    Intacct export
-    •    LIDAC eligibility report
-    •    ZIP accumulation report
-    •    Exceptions summary across all steps
+    •    LIDAC / CEJST report
+    •    Accumulation report
+    •    Exceptions summary
 
-Outputs:
-    •    output_step8/phase1_intacct_export.csv
-    •    output_step8/phase1_lidac_report.csv
-    •    output_step8/phase1_zip_accumulation.csv
-    •    output_step8/phase1_exceptions_summary.csv
+All saved under /output_step8/.
 
 ⸻
 
@@ -134,66 +82,59 @@ Outputs:
 
 greenie-re-data-pipeline/
 │
-├── raw/                          # Source carrier files (.xlsx, .csv)
-│   ├── C001_20251201_bordereaux.xlsx
-│   ├── C002_20251201_bordereaux.xlsx
-│   └── C003_20251201_bordereaux.xlsx
+├── raw/                        # Input carrier bordereaux files
+│   ├── C001_*.xlsx
+│   ├── C002_*.xlsx
+│   └── C003_*.xlsx
 │
 ├── config/
-│   ├── schema_registry.py        # Central schema + dtypes
-│   ├── generate_data.py          # Fake data generator (optional)
+│   ├── schema_registry.py      # Central schema definition
+│   ├── generate_data.py        # Synthetic data generator
 │   ├── download_hud_zip_tract_crosswalk.py
 │   └── external_data/
-│       ├── cejst_v2_communities.csv
-│       └── hud_zip_tract_crosswalk.csv
-│
-├── output_step1/ ... output_step8/
-│                               # Each step's silver/gold outputs + exceptions
+│       ├── hud_zip_tract_crosswalk.csv
+│       └── cejst_v2_communities.csv
 │
 ├── doc/
-│   ├── Phase1_Architecture.tex  # LaTeX technical architecture document
+│   ├── Phase1_Architecture.tex
 │   ├── Phase1_Architecture.pdf
-│   └── diagram assets
+│   └── tikz diagrams
 │
-├── step1_intake_and_quality.py
-├── step2_extraction_normalization.py
-├── step3_zip_extraction.py
-├── step4_zip_to_tract_mapping.py
-├── step5_lidac_eligibility_cejst.py
-├── step6_journal_entry_mapping.py
-├── step7_zip_accumulation.py
-└── step8_phase1_outputs.py
+├── output_step1/
+├── output_step2/
+├── output_step3/
+├── output_step4/
+├── output_step5/
+├── output_step6/
+├── output_step7/
+└── output_step8/
 
 
 ⸻
 
-▶️ How to Run the Pipeline
+🛠️ Installation & Dependencies
 
-1. Install dependencies
+Requirements
+    •    Python 3.10+
+    •    pip / conda environment
 
-conda create -n greenie python=3.10
-conda activate greenie
+Install Dependencies
+
 pip install -r requirements.txt
 
-If requirements.txt does not exist, generate it:
-
-pip freeze > requirements.txt
-
-
-⸻
-
-2. Place carrier raw files
-
-Place all provided bordereaux files into:
-
-raw/
-
+Dependencies include:
+    •    pandas
+    •    numpy
+    •    openpyxl
+    •    uszipcode (optional)
+    •    requests
+    •    python-dateutil
 
 ⸻
 
-3. Run all steps sequentially
+▶️ Running the Pipeline
 
-You may run each step individually:
+Run each step sequentially:
 
 python step1_intake_and_quality.py
 python step2_extraction_normalization.py
@@ -204,102 +145,67 @@ python step6_journal_entry_mapping.py
 python step7_zip_accumulation.py
 python step8_phase1_outputs.py
 
+Alternatively, you can create a master runner script in Phase 2.
 
 ⸻
 
-4. Final Deliverables
+📥 Inputs
 
-After Step 8, all Phase-1 outputs are located in:
+Place client files in:
 
-output_step8/
+/raw/*.xlsx
 
-
-⸻
-
-📥 Expected Inputs
-
-Raw files (raw/)
-    •    One or more carrier bordereaux files
-    •    Supported formats:
-    •    .xlsx
-    •    .csv
-    •    Must contain a project record table with:
-    •    Premium fields
-    •    Dates
-    •    Addresses for ZIP extraction
-    •    Broker / obligee fields
-    •    Carrier metadata
+Assumptions:
+    •    Each file is a standard bordereaux format
+    •    Columns must include key attributes defined in schema_registry.py
 
 ⸻
 
-📤 Pipeline Outputs (Business Deliverables)
+📤 Outputs
 
-Output File    Description
-phase1_intacct_export.csv    Intacct journal entries
-phase1_lidac_report.csv    LIDAC eligibility report
-phase1_zip_accumulation.csv    ZIP accumulation + red/yellow/green flags
-phase1_exceptions_summary.csv    Cross-step exception logging
+Final packaged results are stored in:
 
+/output_step8/
 
-⸻
-
-⚙️ Dependencies
-    •    Python 3.10+
-    •    pandas
-    •    numpy
-    •    openpyxl (Excel support)
-    •    requests (HUD downloads)
-    •    python-dateutil
-    •    tqdm
-
-(Optional)
-    •    jupyter
-    •    matplotlib
+Contains:
+    •    Intacct JE CSV
+    •    LIDAC/CEJST eligibility file
+    •    ZIP-level accumulation file
+    •    Exceptions report
 
 ⸻
 
-🧪 Testing & Validation
+🌱 Why This Pipeline Matters
 
-Unit tests (future roadmap):
+This architecture demonstrates:
+    •    A fully automated underwriting & compliance micro-pipeline
+    •    Production-grade geospatial linking
+    •    Deterministic eligibility classification
+    •    Real-world accounting-system readiness
+    •    Repeatable and scalable ingestion for hundreds of carriers / MGAs
 
-tests/
-  ├── test_schema_registry.py
-  ├── test_zip_parsing.py
-  ├── test_cejst_matching.py
-  └── test_journal_mapping.py
+Greenie Re can scale this to:
+    •    Automate risk analytics
+    •    Build dynamic LIDAC dashboards
+    •    Integrate with API-based carrier feeds
+    •    Support annual/quarterly filings
+    •    Provide regulators auditable data lineage
+
+⸻
+
+🧩 Next Steps (Phase 2 & Phase 3)
+
+Phase    Deliverables
+Phase 2    UI portal, automated scheduler, API ingestion, S3/Blob storage, full audit logs
+Phase 3    Production deployment, authentication, API endpoints for carriers & MGAs, dashboards, underwriting engine
 
 
 ⸻
 
-📘 Additional Documentation Included
+👥 Authors
 
-Located in /doc/:
-    •    Phase1_Architecture.pdf
-Full system architecture diagram (TikZ)
-    •    Phase1_Architecture.tex
-LaTeX source with diagram + technical narrative
-
-⸻
-
-🚀 Roadmap (Phase 2+)
-    •    API layer for automated ingestion
-    •    Deployment on AWS Lambda / ECS
-    •    Scheduled runs via Airflow / Prefect
-    •    UI dashboard for ZIP + LIDAC visualization
-    •    Carrier-specific schema auto-detection
-    •    Automated report emailing
-
-⸻
-
-📄 License
-
-To be added once client delivery terms are finalized.
-(Default is Proprietary – Not for Redistribution)
-
-⸻
-
-🤝 Contact
-
-Greenie Re / Reinsurance Analytics
-📧 stella.dong@reinsuranceanalytics.io
+Greenie Re
+Co-founders:
+    •    Stella Dong – Applied Mathematics, ML Engineering, Reinsurance Data Systems
+    •    James Finlay – Wharton, Reinsurance Strategy, Risk Finance
 
