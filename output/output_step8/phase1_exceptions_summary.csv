@@ -1,0 +1,6 @@
+step,file,rows
+STEP3,output_step3/exceptions_step3_zip_issues.csv,0.0
+STEP4,output_step4/exceptions_step4_tract_mapping.csv,0.0
+STEP5,output_step5/exceptions_step5_missing_cejst_match.csv,66.0
+STEP6,output_step6/exceptions_step6_journal_mapping.csv,
+STEP7,output_step7/exceptions_step7_missing_zip_or_premium.csv,0.0

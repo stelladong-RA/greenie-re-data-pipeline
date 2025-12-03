@@ -1,0 +1,12 @@
+zip_code,project_count,carriers_involved,total_gross_premium,total_penal_amount,accumulation_flag,accumulation_note
+01810,5,3,247981.7,3045983.13,RED,High density or penal amount – review
+02115,2,2,105213.03,1134350.07,YELLOW,Moderate density or penal amount
+15222,2,2,83573.53,516565.28,YELLOW,Moderate density or penal amount
+17815,3,2,131231.56,1116356.03,YELLOW,Moderate density or penal amount
+19103,1,1,66199.39,399975.29,GREEN,Low density / low penal amount
+19610,7,3,328311.29000000004,2774848.24,RED,High density or penal amount – review
+30309,3,1,132802.42,990666.52,YELLOW,Moderate density or penal amount
+80903,10,2,286553.66,3051167.92,RED,High density or penal amount – review
+90027,2,1,70835.27,650966.01,YELLOW,Moderate density or penal amount
+94704,4,1,159402.99,1586019.79,RED,High density or penal amount – review
+98101,15,3,568741.35,5336046.88,RED,High density or penal amount – review
